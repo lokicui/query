@@ -1,8 +1,9 @@
 // Copyright (c) 2015, lokicui@gmail.com. All rights reserved.
-#include <iostream>
-#include "src/index_file.h"
-#include "src/intersector.h"
 #include "thirdparty/gtest/gtest.h"
+#include "common/base/scoped_ptr.h"
+#include <vector>
+#include "src/dnf_expr.h"
+#include "src/query_term.h"
 
 int main(int argc, char **argv)
 {
@@ -20,15 +21,24 @@ int main(int argc, char **argv)
         if (index->new_queryterm(&qt, *it))
             terms.push_back(qt);
     }
+    typedef DNFExpr<QueryTerm*> dnf_t;
+    typedef dnf_t::candidate_t candidate_t;
 
-    Intersector *intersector = new Intersector(terms);
-    pageid_t pageid(0);
-    while (intersector->next(&pageid, pageid))
+    candidate_t candidate1, candidate2;
+    candidate1.assign(terms.begin(), terms.end());
+    terms.pop_back();
+    candidate2.assign(terms.begin(), terms.end());
+
+    dnf_t  expr;
+    expr.add(&candidate1);
+    expr.add(&candidate2);
+    pageid_t docid(0);
+    std::vector< const dnf_t::candidate_t * > match_candidates;
+    while (expr.next(&docid, &match_candidates, docid))
     {
-        std::cout << pageid << std::endl;
+        std::cout << docid << std::endl;
     }
 
-    delete intersector;
     for (std::vector<QueryTerm*>::const_iterator it = terms.begin(); it != terms.end(); ++it)
     {
         delete *it;

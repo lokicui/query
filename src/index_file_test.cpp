@@ -10,5 +10,6 @@ int main(int argc, char **argv)
 
     Index *index = new Index(argv[1]);
     index->dump_termlist();
+    delete index;
     return 0;
 }

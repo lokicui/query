@@ -66,3 +66,18 @@ cc_binary(
         '//src:index_file',
     ],
 )
+
+cc_binary(
+    name = 'dnf_expr_test',
+    srcs = [
+        'dnf_expr_test.cpp',
+    ],
+    deps = [
+        '//common/base/string:string',
+        '//common/net/http:http',
+        '//common/crypto/hash:hash',
+        '//common/encoding:encoding',
+        '//common/system/concurrency:concurrency',
+        '//src:index_file',
+    ],
+)

@@ -1,9 +1,8 @@
 // Copyright (c) 2015, lokicui@gmail.com. All rights reserved.
-#include "thirdparty/gtest/gtest.h"
 #include "common/base/scoped_ptr.h"
-#include "std_def.h"
-#include "index_file.h"
-#include "query_term.h"
+#include "src/query_term.h"
+#include "src/std_def.h"
+#include "thirdparty/gtest/gtest.h"
 
 int main(int argc, char **argv)
 {
