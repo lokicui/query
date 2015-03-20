@@ -1,18 +1,17 @@
 // Copyright (c) 2015, lokicui@gmail.com. All rights reserved.
-#ifndef DNF_EXPR_H
-#define DNF_EXPR_H
+#ifndef SRC_DNF_EXPR_H
+#define SRC_DNF_EXPR_H
 #pragma once
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
-#include <map>
-#include <list>
-#include <vector>
+#include <algorithm>
 #include <iostream>
+#include <map>
 #include <string>
+#include <vector>
 #include <tr1/functional>
-#include "src/query_term.h"
 #include "src/std_def.h"
 
 template <typename T>
@@ -36,6 +35,11 @@ public:
 };
 
 // 析取范式
+// 类型U必须有两个方法
+//  1、size_t get_df() 返回每个term的df值
+//  2、bool seek_lower_bound(pageid_t *cdocid, pageid_t predocid);
+//         return true, if found cdocid greater then predocid
+//         return false, if reach the end
 template <typename U>
 class DNFExpr
 {
@@ -59,8 +63,8 @@ public:
         T at(size_t i) const { return terms_.at(i); }
         bool empty() const { return terms_.empty(); }
         size_t size() const { return terms_.size(); }
-        iterator begin(){ return terms_.begin(); }
-        iterator end(){ return terms_.end(); }
+        iterator begin() { return terms_.begin(); }
+        iterator end() { return terms_.end(); }
         const_iterator begin() const { return terms_.begin(); }
         const_iterator end() const { return terms_.end(); }
         void push_back(const T& val)
@@ -72,6 +76,10 @@ public:
             terms_.assign(first, last);
         }
     private:
+        static bool cmp(const T lhs, const T rhs)
+        {
+            return lhs->get_df() < rhs->get_df();
+        }
         std::vector<T> terms_;
     }candidate_t;
 
@@ -80,9 +88,11 @@ public:
     public:
         Node():data_(NULL), parent_(NULL), fail_(NULL), succ_(NULL), candidate_(NULL)
         {}
-        Node(T t, Node* parent):data_(t), parent_(parent), fail_(NULL), succ_(NULL), candidate_(NULL)
+        Node(T t, Node* parent):data_(t), parent_(parent), fail_(NULL),
+                                            succ_(NULL), candidate_(NULL)
         {}
-        Node(T t, Node* parent, Node* succ, Node* fail):data_(t), parent_(parent), fail_(fail), succ_(succ), candidate_(NULL)
+        Node(T t, Node* parent, Node* succ, Node* fail):data_(t), parent_(parent),
+                                        fail_(fail), succ_(succ), candidate_(NULL)
         {}
         ~Node()
         {
@@ -208,7 +218,7 @@ out:
         } while (p != root_);
         p = p->parent_;
         node_t *next = p->succ_;
-        for(; i < candidate->size(); ++i)
+        for (; i < candidate->size(); ++i)
         {
             node_t *node = new node_t(candidate->at(i), p, next, next);
             p->succ_ = node;
@@ -283,16 +293,18 @@ out:
         node_t *leaf(p);
         p = p->parent_;
         // 假定现在需要删除BCD这个candidate
-        // 在这里依次删除了 D C, 到B的时候就不满足条件了,证明B还有兄弟节点(A->parent_ == B->parent_ == root_)
+        // 在这里依次删除了 D C, 到B的时候就不满足条件了,
+        // 证明B还有兄弟节点(A->parent_ == B->parent_ == root_)
         while ( p->succ_ == leaf && p->fail_ == leaf->fail_)
         {
             p->succ_ = leaf->succ_;
-            //p->fail_ = leaf->fail_;
+            // p->fail_ = leaf->fail_;
             delete leaf;
             leaf = p;
             p = p->parent_;
         }
-        // p已经指向R了, leaf指向B, 而且B有兄弟节点,那把B->parent_所有的儿子整理一下就ok了(链表删除B节点)
+        // p已经指向R了, leaf指向B, 而且B有兄弟节点,
+        // 那把B->parent_所有的儿子整理一下就ok了(链表删除B节点)
         // BFS遍历一下
         do
         {
@@ -324,4 +336,4 @@ private:
     node_t *root_;
     std::tr1::hash<T> hash_;
 };
-#endif // DNF_EXPR_H
+#endif // SRC_DNF_EXPR_H
