@@ -14,9 +14,8 @@
 #include "src/std_def.h"
 
 /*
- *AC自动机实现candidate求交
+ *AC自动机实现candidate求交, 还有问题，待完善！！！！
  */
-
 template <typename T>
 class TypeTraits
 {
