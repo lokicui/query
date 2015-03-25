@@ -26,6 +26,7 @@ public:
     typedef std::map<termid_t, offset_t> termid2offset_t;
 public:
     explicit TextIndexFile(const std::string fname);
+    ~TextIndexFile() { if (m_fd) fclose(m_fd); }
     bool get_offset(offset_t *offset, const termid_t termid);
     void dump_termlist(std::string *ret = NULL);
     void init();

@@ -10,13 +10,13 @@
 #include "thirdparty/jsoncpp/reader.h"
 #include "thirdparty/jsoncpp/value.h"
 #include "thirdparty/jsoncpp/writer.h"
+#include "common/base/closure.h"
 #include "common/base/compatible/string.h"
 #include "common/base/string/string_number.h"
 #include "common/base/string/string_piece.h"
 #include "common/base/string/algorithm.h"
-#include "common/crypto/hash/md5.h"
-#include "common/base/closure.h"
 #include "common/base/string/algorithm.h"
+#include "common/crypto/hash/md5.h"
 #include "common/encoding/charset_converter.h"
 #include "common/net/http/http_client.h"
 #include "common/net/http/http_server.h"
@@ -35,6 +35,8 @@ using namespace std;
 
 DEFINE_int32(request_number, 10, "max request number");
 DEFINE_int32(request_tos, 96, "default tos value");
+DEFINE_int32(max_gram_num, 6, "max gram number");
+DEFINE_int32(listen_port, 12345, "default listen port");
 DEFINE_string(idata_path, "../data", "default index file path");
 
 Atomic<bool> g_server_started = false;
@@ -132,6 +134,55 @@ void urldecode(const std::string& input, std::string& output)
     }
 }
 
+bool UTF16_To_UTF8(const string& in, string* out, size_t *converted_size)
+{
+    CharsetConverter c("UTF-16LE", "UTF-8");
+    return c.Convert(in, out, converted_size);
+}
+
+bool UTF8_To_UTF16(const string& in, string* out, size_t *converted_size)
+{
+    CharsetConverter c("UTF-8", "UTF-16LE");
+    return c.Convert(in, out, converted_size);
+}
+
+
+
+bool Split2Gram(const string& in, set<string> *ret, uint32_t max_gram_num = 5)
+{
+    // 转utf16进行截断,然后再转回来
+    string converted;
+    size_t converted_size(0);
+    if (!UTF8_To_UTF16(in, &converted, &converted_size))
+        return false;
+    size_t csize = converted.size() / 2;
+    if (csize <= max_gram_num)
+    {
+        ret->insert(in);
+    }
+    else
+    {
+        size_t num = (csize+max_gram_num-1) / max_gram_num;
+        for (size_t i = 0; i < num; ++i)
+        {
+            size_t start = i * max_gram_num * 2;
+            size_t end = (i+1) * max_gram_num * 2;
+            if (end > converted.size())
+                end = converted.size();
+            if (end - start < 2 * 2 && start >= end - start)
+                start -= end - start;
+            string kd = converted.substr(start, end-start);
+            string ckd;
+            size_t size(0);
+            if (UTF16_To_UTF8(kd, &ckd, &size))
+            {
+                ret->insert(ckd);
+            }
+        }
+    }
+    return true;
+}
+
 void DoProcessRequest(const HttpRequest* http_request,
         HttpResponse* http_response,
         Closure<void>* done)
@@ -175,17 +226,30 @@ void DoProcessRequest(const HttpRequest* http_request,
     set<string> kwds_set;
     set<termid_t> termid_set;
     ReplaceAll(&kwds_decoded, "，", ",");
+    ReplaceAll(&kwds_decoded, " ", ",");
+    ReplaceAll(&kwds_decoded, "　", ",");
     SplitStringToSet(kwds_decoded, ",", &kwds_set);
     std::string kwds_pieces;
     for (set<string>::const_iterator it = kwds_set.begin(); it != kwds_set.end(); ++ it) {
         const std::string normalized_kwds = get_normalized_kwds(*it);
         array_kwds.append(normalized_kwds);
-        kwds_pieces += normalized_kwds + "/";
-        md5 = common::MD5::HexDigest(normalized_kwds);
-        md5 = md5.substr(md5.length() - 16);
-        termid_t termid;
-        StringToNumber(md5, &termid, 16);
-        termid_set.insert(termid);
+        set<string> kwds_;
+        if (!Split2Gram(normalized_kwds, &kwds_, FLAGS_max_gram_num))
+        {
+            LOG(WARNING) << "Split2Gram failed";
+            continue;
+        }
+        for (set<string>::const_iterator its = kwds_.begin(); its != kwds_.end(); ++ its)
+        {
+            const string& kwd = *its;
+            kwds_pieces += kwd + "/";
+            md5 = common::MD5::HexDigest(kwd);
+            md5 = md5.substr(md5.length() - 16);
+            termid_t termid;
+            StringToNumber(md5, &termid, 16);
+            LOG(INFO) << kwd << "->" << termid;
+            termid_set.insert(termid);
+        }
     }
     LOG(INFO) << kwds_decoded << "-->" << kwds_pieces;
 #if 0
@@ -217,6 +281,7 @@ void DoProcessRequest(const HttpRequest* http_request,
             queryterms.push_back(qt);
         else
         {
+            LOG(WARNING) << *it << "dones't exists";
             hitall = false;
             break;
         }
@@ -274,7 +339,7 @@ public:
         http_server.RegisterHandler(g_post_handler_path, handler);
 
         // Start the two servers.
-        bool server_started = http_server.Start(":12345", &g_server_address);
+        bool server_started = http_server.Start(StringFormat(":%u", FLAGS_listen_port), &g_server_address);
         if (server_started) {
             g_server_started = true;
         }
@@ -291,6 +356,7 @@ public:
 int main(int argc, char ** argv)
 {
     google::ParseCommandLineFlags(&argc, &argv, true);
+    google::InitGoogleLogging(argv[0]);
     init_stopwords();
     g_index = new Index(StringFormat("%s/part-*", FLAGS_idata_path.c_str()));
 
