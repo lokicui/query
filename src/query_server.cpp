@@ -35,7 +35,7 @@ using namespace std;
 
 DEFINE_int32(request_number, 10, "max request number");
 DEFINE_int32(request_tos, 96, "default tos value");
-DEFINE_int32(max_gram_num, 6, "max gram number");
+DEFINE_int32(max_gram_num, 5, "max gram number");
 DEFINE_int32(listen_port, 12345, "default listen port");
 DEFINE_string(idata_path, "../data", "default index file path");
 

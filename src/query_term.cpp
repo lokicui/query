@@ -62,12 +62,12 @@ bool QueryTerm::init()
     if (offset < 2) {
         LOG(ERROR) << m_fd->get_fname() << " decode_df failed!";
     } else {
+        m_cursor += offset;
         // decode skiplist
-        offset += decode_skiplist(buff + offset);
+        m_cursor += decode_skiplist(buff + offset);
         // curosr已经指向了doclist的第一个block
         ret = true;
     }
-    m_cursor += offset;
     return ret;
 }
 
@@ -149,6 +149,7 @@ size_t QueryTerm::decode_skiplist(char *data)
     {
         scoped_ptr<char> buff(new char[skiplist_length + 1]);    // 块缓存
         size_t nread = m_fd->read(buff.get(), skiplist_length, m_cursor+offset);
+        PCHECK(nread == skiplist_length) << "require " << skiplist_length << " but read " << nread << ".";
         data = buff.get();
         data[nread] = '\0';
         skipair_t skipair;
@@ -156,7 +157,7 @@ size_t QueryTerm::decode_skiplist(char *data)
         while ( (pfind = strstr(data, kDelim)) != NULL )
         {
             *pfind = '\0';
-            if ( i % 2 == 0 )
+            if ( i++ % 2 == 0 )
             {
                 StringToNumber(data, &skipair.first, kValueBase);
             }
@@ -169,7 +170,7 @@ size_t QueryTerm::decode_skiplist(char *data)
         }
         offset += data - buff.get();
     }
-    assert(m_skiplist.size() > 1);
+    CHECK(m_skiplist.size() > 1) << m_skiplist.size();
     LOG(INFO) << "skiplist.size()=" << m_skiplist.size();
     return offset;
 }

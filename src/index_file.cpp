@@ -105,7 +105,6 @@ void TextIndexFile::init()
         const termid_t &termid = termlist[i];
         const offset_t &offset = offsetlist[i];
         m_termid2offset.insert(std::pair<termid_t, offset_t>(termid, offset));
-        // LOG(INFO) << termid;
     }
     LOG(INFO) << get_fname() << " load " << m_termid2offset.size() << " records.";
 }
