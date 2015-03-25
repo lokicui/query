@@ -34,12 +34,12 @@ public:
         // @todo query term排重
         querytermlist_t termlist_sort;
         termlist_sort.assign(termlist.begin(), termlist.end());
-        std::sort(termlist_sort.begin(), termlist_sort.end(), query_term_cmp);
         if (!termlist_sort.empty())
         {
+            std::sort(termlist_sort.begin(), termlist_sort.end(), query_term_cmp);
             m_min_df_term = termlist_sort[0];
+            m_qtlist.assign(termlist_sort.begin() + 1, termlist_sort.end());
         }
-        m_qtlist.assign(termlist_sort.begin() + 1, termlist_sort.end());
     }
     bool next(pageid_t *doc, const pageid_t predoc)
     {
