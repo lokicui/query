@@ -1,14 +1,14 @@
 // Copyright (c) 2015, lokicui@gmail.com. All rights reserved.
 #include "query_term.h"
 
-QueryTerm::QueryTerm(IndexFile* fd, termid_t termid, offset_t o):m_fd(fd), m_offset(o), m_cursor(o),
-    m_block_idx(-1), m_pagelist_idx(0), m_termid(termid)
+TextQueryTerm::TextQueryTerm(IIndexFile* fd, termid_t termid, offset_t o): BaseQueryTerm(fd, termid, o), m_cursor(o),
+    m_block_idx(-1), m_pagelist_idx(0)
 {
     m_pagelist.reserve(kCacheSize);
     init();
 }
 
-bool QueryTerm::next(pageid_t *pageid)
+bool TextQueryTerm::next(pageid_t *pageid)
 {
     // 顺序扫
     if (++m_pagelist_idx >= m_pagelist.size())
@@ -23,7 +23,7 @@ bool QueryTerm::next(pageid_t *pageid)
     return true;
 }
 
-bool QueryTerm::seek_lower_bound(pageid_t* bound, const pageid_t pageid)  // >=
+bool TextQueryTerm::seek_lower_bound(pageid_t* bound, const pageid_t pageid)  // >=
 {
     // seek的时候只能先seek小的, 再seek大的, 反之不行
     // 根据跳表确定termid所在的block, 如果当前块没有加载,立即加载进来
@@ -51,7 +51,7 @@ bool QueryTerm::seek_lower_bound(pageid_t* bound, const pageid_t pageid)  // >=
     return true;
 }
 
-bool QueryTerm::init()
+bool TextQueryTerm::init()
 {
     char buff[kHeaderSize + 1] = {0};    // 块缓存
     size_t nread = m_fd->read(buff, kHeaderSize, m_cursor);
@@ -71,12 +71,12 @@ bool QueryTerm::init()
     return ret;
 }
 
-size_t QueryTerm::read_next_block()
+size_t TextQueryTerm::read_next_block()
 {
     return read_block(get_block_index() + 1);
 }
 
-size_t QueryTerm::read_block(int32_t block_index)
+size_t TextQueryTerm::read_block(int32_t block_index)
 {
     m_pagelist_idx = 0;
     if (block_index < int32_t(m_skiplist.size()) - 1)
@@ -95,19 +95,19 @@ size_t QueryTerm::read_block(int32_t block_index)
     return 0;
 }
 
-offset_t QueryTerm::get_block_cursor(int32_t block_index)
+offset_t TextQueryTerm::get_block_cursor(int32_t block_index)
 {
     assert(block_index >= 0 && block_index < int32_t(m_skiplist.size()) - 1);
     return m_cursor + m_skiplist[block_index].second;
 }
-size_t QueryTerm::get_block_size(int32_t block_index)
+size_t TextQueryTerm::get_block_size(int32_t block_index)
 {
     // 根据跳表计算每个block的size
     assert(block_index < m_skiplist.size() - 1);
-    return m_skiplist[block_index+1].second - m_skiplist[block_index].second;
+    return size_t(m_skiplist[block_index+1].second - m_skiplist[block_index].second);
 }
 
-size_t QueryTerm::decode_skiplist(char *data)
+size_t TextQueryTerm::decode_skiplist(char *data)
 {
     char *orig(data);
     char *pfind = strstr(data, kDelim);
@@ -175,7 +175,7 @@ size_t QueryTerm::decode_skiplist(char *data)
     return offset;
 }
 
-size_t QueryTerm::decode_block_pagelist(char *data)
+size_t TextQueryTerm::decode_block_pagelist(char *data)
 {
     // 差分压缩了
     // doclist必须是ascending序
@@ -198,7 +198,7 @@ size_t QueryTerm::decode_block_pagelist(char *data)
     return data - orig;
 }
 
-size_t QueryTerm::decode_df(char *data)
+size_t TextQueryTerm::decode_df(char *data)
 {
     // 返回解压了多少字节数据
     char *pfind = strstr(data, kDelim);

@@ -21,10 +21,10 @@ public:
     uint8_t rich_;
 }docinfo_t;
 
-class DocInfos
+class DocInfoManager
 {
 public:
-    DocInfos()
+    DocInfoManager()
     {
     }
     size_t load(const std::string pattern)
@@ -40,7 +40,7 @@ public:
                 PLOG(ERROR) << fname << " open failed";
                 continue;
             }
-            Closure<void>* closure = NewClosure(this, &DocInfos::load_fd, fd);
+            Closure<void>* closure = NewClosure(this, &DocInfoManager::load_fd, fd);
             thread_pool_.AddTask(closure);
         }
         thread_pool_.WaitForIdle();

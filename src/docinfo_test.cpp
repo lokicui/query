@@ -3,7 +3,7 @@
 
 int main(int argc, char **argv)
 {
-    DocInfos infos;
+    DocInfoManager infos;
     std::cout << "load " << infos.load(argv[1]) << " records." << std::endl;
     const docinfo_t *docinfo = infos.get_by_id(268448835);
     if (docinfo)

@@ -15,8 +15,43 @@
  *
  */
 
-class IndexFile;
-class QueryTerm
+class IIndexFile;
+
+// query term接口类
+class IQueryTerm
+{
+public:
+    virtual ~IQueryTerm() {}
+    virtual bool next(pageid_t *pageid) = 0;
+    virtual bool seek_lower_bound(pageid_t* bound, const pageid_t pageid) = 0;  // >=
+    virtual uint32_t get_df() const = 0;
+    virtual termid_t get_termid() const = 0;
+};
+
+class BaseQueryTerm : public IQueryTerm
+{
+public:
+    BaseQueryTerm(IIndexFile* fd, termid_t termid, offset_t o) : m_fd(fd), m_offset(o), m_df(0), m_termid(termid)
+    {}
+    // virtual bool next(pageid_t *pageid) = 0;
+    // virtual bool seek_lower_bound(pageid_t* bound, const pageid_t pageid) = 0;  // >=
+    uint32_t get_df() const
+    {
+        return m_df;
+    }
+    termid_t get_termid() const
+    {
+        return m_termid;
+    }
+protected:
+    IIndexFile *m_fd;
+    const offset_t m_offset;       // terminfo在m_fd中的偏移, const
+    uint32_t m_df;                 // term的df,总共有多少doc
+    termid_t m_termid;
+};
+
+// 文本索引的TermBuf
+class TextQueryTerm : public BaseQueryTerm
 {
 public:
     typedef std::vector<pageid_t> pagelist_t;
@@ -26,26 +61,10 @@ public:
     static const size_t kHeaderSize = 4096;   // 设置为Header的平均长度的下限,包括skiplist的大小
 
 public:
-    QueryTerm(IndexFile* fd, termid_t termid, offset_t o);
+    TextQueryTerm(IIndexFile* fd, termid_t termid, offset_t o);
     bool next(pageid_t *pageid);
     bool seek_lower_bound(pageid_t* bound, const pageid_t pageid);  // >=
     bool init();
-    uint32_t get_df() const
-    {
-        return m_df;
-    }
-    termid_t get_termid() const
-    {
-        return m_termid;
-    }
-    int32_t get_block_index() const
-    {
-        return m_block_idx;
-    }
-    void set_block_index(int32_t block_index)
-    {
-        m_block_idx = block_index;
-    }
 
 private:
     size_t read_next_block();
@@ -59,15 +78,19 @@ private:
     {
         return lhs.first < rhs.first;
     }
+    int32_t get_block_index() const
+    {
+        return m_block_idx;
+    }
+    void set_block_index(int32_t block_index)
+    {
+        m_block_idx = block_index;
+    }
 
 private:
-    IndexFile *m_fd;
-    const offset_t m_offset;       // terminfo在m_fd中的偏移, const
     offset_t m_cursor;             // doclist 第一个block在文件中的偏移,skiplist中的offset以此为基址
-    uint32_t m_df;                 // term的df,总共有多少doc
     int32_t m_block_idx;           // 第m_block_idx 个block已经加载到内存中了
     size_t m_pagelist_idx;         // pagelist 中的第m_pagelist_idx 个元素已经访问过了
-    termid_t m_termid;
     pagelist_t m_pagelist;         // pagelist buff
     skiplist_t m_skiplist;
     // skiplist 跳表,记录每个block的max pageid以及其在文件中的偏移,每个block需要单独解压

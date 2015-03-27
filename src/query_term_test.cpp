@@ -6,9 +6,9 @@
 
 int main(int argc, char **argv)
 {
-    IndexFile *fd = new TextIndexFile(argv[1]);
+    IIndexFile *fd = new TextIndexFile(argv[1]);
     offset_t offset = atoi(argv[2]);
-    QueryTerm *qt = new QueryTerm(fd, offset, 1);
+    IQueryTerm *qt = new TextQueryTerm(fd, offset, 1);
     pageid_t pageid;
     while (true)
     {

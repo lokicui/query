@@ -1,23 +1,45 @@
 // Copyright (c) 2015, lokicui@gmail.com. All rights reserved.
 #include "src/index_file.h"
 
-TextIndexFile::TextIndexFile(const std::string fname):m_fname(fname),m_max_termid(0)
+BaseIndexFile::BaseIndexFile(const std::string fname): m_fname(fname), m_max_termid(0), m_fd(NULL)
 {
+    MutexLocker locker(m_mutex);
     m_fd = fopen(fname.c_str(), "r");
-    assert(m_fd != NULL);
-    if (!m_fd)
-        throw std::runtime_error(StringFormat("%s:%d:%s %s open faield with %s\n", __FILE__, __LINE__, __FUNCTION__,
-                                              fname.c_str(), strerror(errno)));
+    PCHECK(m_fd != NULL) << fname << " open failed";
 }
 
-bool TextIndexFile::get_offset(offset_t *offset, const termid_t termid)
+bool BaseIndexFile::get_offset(offset_t *offset, const termid_t termid)
 {
     termid2offset_t::const_iterator it = m_termid2offset.find(termid);
-    if (it != m_termid2offset.end()) {
+    if (it != m_termid2offset.end())
+    {
         *offset = it->second;
         return true;
     }
     return false;
+}
+
+size_t BaseIndexFile::read(char *buff, size_t size, ssize_t offset, int whence)
+{
+    if (!m_fd)
+        return 0;
+    MutexLocker locker(m_mutex);
+    if (fseek(m_fd, static_cast<long>(offset), whence))
+        return 0;
+    return fread(static_cast<void *>(buff), 1, size, m_fd);
+}
+
+void BaseIndexFile::dump_termlist(std::string *ret)
+{
+    for (termid2offset_t::const_iterator it = m_termid2offset.begin(); it != m_termid2offset.end(); ++it)
+    {
+        termid_t termid = it->first;
+        // termid %= 1023;
+        if (ret)
+            StringFormatAppend(ret, "%lu\n", termid);
+        else
+            std::cout << StringFormat("%lu\n", termid);
+    }
 }
 
 void TextIndexFile::init()
@@ -109,28 +131,6 @@ void TextIndexFile::init()
     LOG(INFO) << get_fname() << " load " << m_termid2offset.size() << " records.";
 }
 
-void TextIndexFile::dump_termlist(std::string *ret)
-{
-    for (termid2offset_t::const_iterator it = m_termid2offset.begin(); it != m_termid2offset.end(); ++it)
-    {
-        termid_t termid = it->first;
-        // termid %= 1023;
-        if (ret)
-            StringFormatAppend(ret, "%lu\n", termid);
-        else
-            std::cout << StringFormat("%lu\n", termid);
-    }
-}
-
-size_t TextIndexFile::read(char *buff, size_t size, ssize_t offset, int whence)
-{
-    if (!m_fd)
-        return 0;
-    MutexLocker locker(m_mutex);
-    if (fseek(m_fd, static_cast<long>(offset), whence))
-        return 0;
-    return fread(static_cast<void *>(buff), 1, size, m_fd);
-}
 
 Index::Index(const std::string pattern)
 {
@@ -149,30 +149,33 @@ int32_t Index::init(const std::string pattern)
     globfree(&globbuf);
     for (size_t i = 0; i < fnames.size(); ++i) {
         const std::string& name = fnames[i];
-        IndexFile * indexfile = new_index_file(name);
+        IIndexFile * indexfile = new_index_file(name);
+        // Closure<void>* closure = NewClosure(indexfile, &TextIndexFile::init);
+        // m_thread_pool.AddTask(closure);
         m_idxfiles.push_back(indexfile);
     }
     m_thread_pool.WaitForIdle();
     return 0;
 }
 
-IndexFile * Index::new_index_file(const std::string name)
+IIndexFile * Index::new_index_file(const std::string name)
 {
     TextIndexFile * indexfile = new TextIndexFile(name);
+    // 放在这里是迫不得已
     Closure<void>* closure = NewClosure(indexfile, &TextIndexFile::init);
     m_thread_pool.AddTask(closure);
     return indexfile;
 }
 
-bool Index::new_queryterm(QueryTerm **queryterm, const termid_t termid)
+bool Index::new_queryterm(IQueryTerm **queryterm, const termid_t termid)
 {
     // @todo 按照termid进行hash, 但由于索引是mapreduce streaming 建的,hash函数不好控制
-    for(std::vector<IndexFile*>::const_iterator it = m_idxfiles.begin(); it != m_idxfiles.end(); ++it)
+    for(std::vector<IIndexFile*>::const_iterator it = m_idxfiles.begin(); it != m_idxfiles.end(); ++it)
     {
         offset_t offset(0);
         if ( (*it)->get_offset(&offset, termid))
         {
-            *queryterm = new QueryTerm(*it, termid, offset);
+            *queryterm = new TextQueryTerm(*it, termid, offset);
             return true;
         }
     }
@@ -181,7 +184,7 @@ bool Index::new_queryterm(QueryTerm **queryterm, const termid_t termid)
 
 void Index::dump_termlist(std::string *ret)
 {
-    for(std::vector<IndexFile*>::const_iterator it = m_idxfiles.begin(); it != m_idxfiles.end(); ++it)
+    for(std::vector<IIndexFile*>::const_iterator it = m_idxfiles.begin(); it != m_idxfiles.end(); ++it)
     {
         (*it)->dump_termlist(ret);
     }

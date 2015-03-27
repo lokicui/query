@@ -14,14 +14,14 @@ int main(int argc, char **argv)
     termids.push_back(3);
     termids.push_back(4);
     termids.push_back(5);
-    std::vector<QueryTerm*> terms;
+    std::vector<IQueryTerm*> terms;
     for (std::vector<termid_t>::const_iterator it = termids.begin(); it != termids.end(); ++it)
     {
-        QueryTerm *qt;
+        IQueryTerm *qt;
         if (index->new_queryterm(&qt, *it))
             terms.push_back(qt);
     }
-    typedef DNFExpr<QueryTerm*> dnf_t;
+    typedef DNFExpr<IQueryTerm*> dnf_t;
     typedef dnf_t::candidate_t candidate_t;
 
     candidate_t candidate1, candidate2;
@@ -39,7 +39,7 @@ int main(int argc, char **argv)
         std::cout << docid << std::endl;
     }
 
-    for (std::vector<QueryTerm*>::const_iterator it = terms.begin(); it != terms.end(); ++it)
+    for (std::vector<IQueryTerm*>::const_iterator it = terms.begin(); it != terms.end(); ++it)
     {
         delete *it;
     }

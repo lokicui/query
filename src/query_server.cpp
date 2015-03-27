@@ -273,10 +273,10 @@ void DoProcessRequest(const HttpRequest* http_request,
     }
 #else
     bool hitall(true);
-    std::vector<QueryTerm*> queryterms;
+    std::vector<IQueryTerm*> queryterms;
     for (std::set<termid_t>::const_iterator it = termid_set.begin(); it != termid_set.end(); ++it)
     {
-        QueryTerm *qt;
+        IQueryTerm *qt;
         if (g_index->new_queryterm(&qt, *it))
             queryterms.push_back(qt);
         else
@@ -299,7 +299,7 @@ void DoProcessRequest(const HttpRequest* http_request,
             array_docid.append(Json::UInt64(docid));
         }
 
-        for (std::vector<QueryTerm*>::const_iterator it = queryterms.begin(); it != queryterms.end(); ++ it)
+        for (std::vector<IQueryTerm*>::const_iterator it = queryterms.begin(); it != queryterms.end(); ++ it)
         {
             delete *it;
         }

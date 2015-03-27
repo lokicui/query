@@ -7,30 +7,41 @@
 #include "src/query_term.h"
 #include "src/std_def.h"
 
-class QueryTerm;
-class IndexFile
+class IQueryTerm;
+
+// Interface of index file
+class IIndexFile
 {
 public:
-    virtual ~IndexFile() {}
-    virtual std::string get_fname() const = 0;
-    virtual termid_t get_max_termid() const = 0;
+    virtual ~IIndexFile() {}
+    virtual void init() = 0;
     virtual size_t read(char *buff, size_t size, ssize_t offset, int whence = SEEK_SET) = 0;
     virtual bool get_offset(offset_t *offset, const termid_t termid) = 0;
-    virtual void init() = 0;
     virtual void dump_termlist(std::string *ret = NULL) = 0;
+    virtual termid_t get_max_termid() const = 0;
+    virtual std::string get_fname() const = 0;
 };
 
-class TextIndexFile: public IndexFile
+// 实现一些基本函数, TextIndexFile BinaryIndexFile共有的函数都放这里了
+// 但base类仍然有一些接口没有实现,还是个抽象类,所以不能生成Base类的对象
+class BaseIndexFile: public IIndexFile
 {
 public:
     typedef std::map<termid_t, offset_t> termid2offset_t;
 public:
-    explicit TextIndexFile(const std::string fname);
-    ~TextIndexFile() { if (m_fd) fclose(m_fd); }
+    explicit BaseIndexFile(const std::string fname);
+    // virtual void init() = 0;
+    size_t read(char *buff, size_t size, ssize_t offset, int whence = SEEK_SET);
     bool get_offset(offset_t *offset, const termid_t termid);
     void dump_termlist(std::string *ret = NULL);
-    void init();
-    size_t read(char *buff, size_t size, ssize_t offset, int whence = SEEK_SET);
+    ~BaseIndexFile()
+    {
+        if (m_fd)
+        {
+            fclose(m_fd);
+            m_fd = NULL;
+        }
+    }
     termid_t get_max_termid() const
     {
         return m_max_termid;
@@ -39,15 +50,23 @@ public:
     {
         return m_fname;
     }
-
-private:
+protected:
     size_t read_(char *buff, size_t size, long offset);
-private:
+protected:
     const std::string m_fname;
     termid_t m_max_termid;
     Mutex m_mutex;
     FILE* m_fd;
     termid2offset_t m_termid2offset;
+};
+
+// 纯文本的索引, hadoop streaming生成的
+class TextIndexFile: public BaseIndexFile
+{
+public:
+    explicit TextIndexFile(const std::string fname) : BaseIndexFile(fname) {}
+    ~TextIndexFile() {}
+    void init();
 };
 
 class Index
@@ -57,12 +76,12 @@ public:
     explicit Index(const std::string pattern);
     int32_t init(const std::string pattern);
     void dump_termlist(std::string *ret = NULL);
-    bool new_queryterm(QueryTerm **queryterm, const termid_t termid);
+    bool new_queryterm(IQueryTerm **queryterm, const termid_t termid);
 private:
-    IndexFile * new_index_file(const std::string name);
+    IIndexFile * new_index_file(const std::string name);
 private:
     ThreadPool m_thread_pool;
-    std::vector<IndexFile*> m_idxfiles;
+    std::vector<IIndexFile*> m_idxfiles;
 };
 
 #endif // SRC_INDEX_FILE_H

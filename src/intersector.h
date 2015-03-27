@@ -23,11 +23,11 @@ class LoserTree
     // 暂不用败者树实现
 };
 
-class QueryTerm;
+class IQueryTerm;
 class Intersector
 {
 public:
-    typedef std::vector<QueryTerm*> querytermlist_t;
+    typedef std::vector<IQueryTerm*> querytermlist_t;
 public:
     Intersector(const querytermlist_t &termlist)
     {
@@ -43,7 +43,7 @@ public:
     }
     bool next(pageid_t *doc, const pageid_t predoc)
     {
-        QueryTerm * min_df_term = get_min_df_term();
+        IQueryTerm * min_df_term = get_min_df_term();
         querytermlist_t * qtlist = get_other_qtlist();
         if (!min_df_term || !qtlist)
             return false;
@@ -71,7 +71,7 @@ again:
     }
 
 private:
-    static bool query_term_cmp(const QueryTerm* lhs, const QueryTerm *rhs)
+    static bool query_term_cmp(const IQueryTerm* lhs, const IQueryTerm *rhs)
     {
         return lhs->get_df() < rhs->get_df();
     }
@@ -79,14 +79,14 @@ private:
     {
         return &m_qtlist;
     }
-    QueryTerm* get_min_df_term()
+    IQueryTerm* get_min_df_term()
     {
         return m_min_df_term;
     }
 
 private:
     querytermlist_t m_qtlist;
-   QueryTerm *m_min_df_term;
+    IQueryTerm *m_min_df_term;
 };
 
 #endif // SRC_INTERSECTOR_H
