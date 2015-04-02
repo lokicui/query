@@ -27,6 +27,7 @@
 #include "common/system/concurrency/thread_pool.h"
 #include "thirdparty/gflags/gflags.h"
 #include "thirdparty/glog/logging.h"
+#include "src/docinfo.h"
 #include "src/index_file.h"
 #include "src/intersector.h"
 #include "src/std_def.h"
@@ -37,11 +38,13 @@ DEFINE_int32(request_number, 10, "max request number");
 DEFINE_int32(request_tos, 96, "default tos value");
 DEFINE_int32(max_gram_num, 5, "max gram number");
 DEFINE_int32(listen_port, 12345, "default listen port");
-DEFINE_string(idata_path, "../data", "default index file path");
+DEFINE_string(index_data, "../index_data", "default index file path");
+DEFINE_string(docinfo_data, "../docinfo_data", "default docinfo file path");
 
 Atomic<bool> g_server_started = false;
 ThreadPool g_thread_pool;
 Index * g_index(NULL);
+DocInfoManager *g_docinfo_mgr(NULL);
 const std::string g_get_handler_path = "/sget";
 const std::string g_post_handler_path = "/spost";
 map<string, string> g_stopwords_map;
@@ -50,7 +53,7 @@ SocketAddressStorage g_server_address;
 int32_t init_stopwords(const char *name = "stopwords")
 {
     char buff[512] = {0};
-    snprintf(buff, sizeof(buff), "%s/%s", FLAGS_idata_path.c_str(), name);
+    snprintf(buff, sizeof(buff), "%s/%s", FLAGS_index_data.c_str(), name);
     FILE *fp = fopen(buff, "r");
     if (!fp)
         return -1;
@@ -252,32 +255,13 @@ void DoProcessRequest(const HttpRequest* http_request,
         }
     }
     LOG(INFO) << kwds_decoded << "-->" << kwds_pieces;
-#if 0
-    map<uint64_t, size_t> docid2freq;
-    for (set<uint64_t>::const_iterator it = termid_set.begin(); it != termid_set.end(); ++ it) {
-        vector<uint64_t> doclist;
-        g_index.get_doclist_by_termid(doclist, *it);
-        for (size_t i = 0; i < doclist.size(); ++ i) {
-            pair< map<uint64_t, size_t>::iterator, bool> find = docid2freq.insert(pair<uint64_t, size_t>(doclist[i], 0));
-            find.first->second ++;
-        }
-    }
-    size_t size_threshold = 1000;
-    Json::Value array_docid;
-    for (map<uint64_t, size_t>::const_iterator it = docid2freq.begin(); it != docid2freq.end(); ++ it) {
-        const uint64_t &docid = it->first;
-        const size_t & freq = it->second;
-        if (freq == termid_set.size() && array_docid.size() < size_threshold) {
-            array_docid.append(Json::UInt64(docid));
-        }
-    }
-#else
+
     bool hitall(true);
     std::vector<IQueryTerm*> queryterms;
     for (std::set<termid_t>::const_iterator it = termid_set.begin(); it != termid_set.end(); ++it)
     {
         IQueryTerm *qt;
-        if (g_index->new_queryterm(&qt, *it))
+        if (g_index->new_queryterm(&qt, *it) && qt)
             queryterms.push_back(qt);
         else
         {
@@ -287,26 +271,63 @@ void DoProcessRequest(const HttpRequest* http_request,
         }
     }
 
-    size_t size_threshold = 1000;
+    static const size_t size_threshold = 1000;
+    static const size_t statistics_threshold = 100000;
+    uint32_t total_ans_cnt(0);
+    uint32_t total_click_cnt(0);
+    uint32_t have_click_cnt(0);
+    uint32_t resolved_cnt(0);
+    uint32_t elite_cnt(0);
+    uint32_t rich_cnt(0);
     Json::Value array_docid;
+    std::map<uint32_t, size_t> classid_st;
+    size_t cnt(0);
     if (hitall)
     {
         Intersector intersector(queryterms);
         pageid_t pageid(0);
-        while (array_docid.size() < size_threshold && intersector.next(&pageid, pageid))
+        while ( cnt < statistics_threshold && intersector.next(&pageid, pageid))
         {
+            cnt ++;
             docid_t docid = pageid2docid(pageid);
-            array_docid.append(Json::UInt64(docid));
-        }
-
-        for (std::vector<IQueryTerm*>::const_iterator it = queryterms.begin(); it != queryterms.end(); ++ it)
-        {
-            delete *it;
+            const docinfo_t *docinfo = g_docinfo_mgr->get_by_id(pageid);
+            if (docinfo)
+            {
+                if (classid_st.find(docinfo->classid_) == classid_st.end())
+                    classid_st[docinfo->classid_] = 0;
+                classid_st[docinfo->classid_] ++;
+                total_ans_cnt += docinfo->answer_cnt_;
+                total_click_cnt += docinfo->click_cnt_;
+                resolved_cnt += docinfo->resolved_;
+                elite_cnt += docinfo->elite_;
+                rich_cnt += docinfo->rich_;
+            }
+            if (array_docid.size() < size_threshold)
+                array_docid.append(Json::UInt64(docid));
         }
     }
-#endif
+
+    for (std::vector<IQueryTerm*>::const_iterator it = queryterms.begin(); it != queryterms.end(); ++ it)
+    {
+        delete *it;
+    }
+
+    Json::Value class_st_array;
+    for (std::map<uint32_t, size_t>::const_iterator it = classid_st.begin(); it != classid_st.end(); ++ it)
+    {
+        class_st_array[StringFormat("%u", it->first)] = Json::UInt64(it->second);
+    }
 
     Json::Value root;
+    Json::Value statistics;
+    statistics["class"] = class_st_array;
+    statistics["st_cnt"] = Json::UInt(cnt);
+    statistics["total_ans_cnt"] = Json::UInt(total_ans_cnt);
+    statistics["total_click_cnt"] = Json::UInt(total_click_cnt);
+    statistics["rich_cnt"] = Json::UInt(rich_cnt);
+    statistics["elite_cnt"] = Json::UInt(elite_cnt);
+    statistics["resolved_cnt"] = Json::UInt(resolved_cnt);
+    root["statistics"] = statistics;
     root["docids"] = array_docid;
     root["kwds"] = array_kwds;
     Json::FastWriter writer;
@@ -358,7 +379,9 @@ int main(int argc, char ** argv)
     google::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
     init_stopwords();
-    g_index = new Index(StringFormat("%s/part-*", FLAGS_idata_path.c_str()));
+    g_docinfo_mgr = new DocInfoManager();
+    g_docinfo_mgr->load(StringFormat("%s/part-*", FLAGS_docinfo_data.c_str()));
+    g_index = new Index(StringFormat("%s/part-*", FLAGS_index_data.c_str()));
 
     HttpServerThread server;
     g_server_started = false;

@@ -26,6 +26,7 @@
 #include "common/system/concurrency/mutex.h"
 #include "common/system/concurrency/this_thread.h"
 #include "common/system/concurrency/thread_pool.h"
+#include "common/system/system_information.h"
 #include "thirdparty/gflags/gflags.h"
 #include "thirdparty/glog/logging.h"
 #include "thirdparty/jsoncpp/json.h"

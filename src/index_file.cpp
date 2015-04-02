@@ -147,23 +147,22 @@ int32_t Index::init(const std::string pattern)
         fnames.push_back(globbuf.gl_pathv[i]);
     }
     globfree(&globbuf);
+    ThreadPool thread_pool(16, 32);
     for (size_t i = 0; i < fnames.size(); ++i) {
         const std::string& name = fnames[i];
-        IIndexFile * indexfile = new_index_file(name);
-        // Closure<void>* closure = NewClosure(indexfile, &TextIndexFile::init);
-        // m_thread_pool.AddTask(closure);
+        IIndexFile * indexfile = new_index_file(name, thread_pool);
         m_idxfiles.push_back(indexfile);
     }
-    m_thread_pool.WaitForIdle();
+    thread_pool.WaitForIdle();
     return 0;
 }
 
-IIndexFile * Index::new_index_file(const std::string name)
+IIndexFile * Index::new_index_file(const std::string name, ThreadPool& thread_pool)
 {
     TextIndexFile * indexfile = new TextIndexFile(name);
     // 放在这里是迫不得已
     Closure<void>* closure = NewClosure(indexfile, &TextIndexFile::init);
-    m_thread_pool.AddTask(closure);
+    thread_pool.AddTask(closure);
     return indexfile;
 }
 

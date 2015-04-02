@@ -31,7 +31,7 @@ public:
 class BaseQueryTerm : public IQueryTerm
 {
 public:
-    BaseQueryTerm(IIndexFile* fd, termid_t termid, offset_t o) : m_fd(fd), m_offset(o), m_df(0), m_termid(termid)
+    explicit BaseQueryTerm(IIndexFile* fd, termid_t termid, offset_t o) : m_fd(fd), m_offset(o), m_df(0), m_termid(termid)
     {}
     // virtual bool next(pageid_t *pageid) = 0;
     // virtual bool seek_lower_bound(pageid_t* bound, const pageid_t pageid) = 0;  // >=
@@ -61,7 +61,7 @@ public:
     static const size_t kHeaderSize = 4096;   // 设置为Header的平均长度的下限,包括skiplist的大小
 
 public:
-    TextQueryTerm(IIndexFile* fd, termid_t termid, offset_t o);
+    explicit TextQueryTerm(IIndexFile* fd, termid_t termid, offset_t o);
     bool next(pageid_t *pageid);
     bool seek_lower_bound(pageid_t* bound, const pageid_t pageid);  // >=
     bool init();

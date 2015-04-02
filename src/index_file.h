@@ -69,6 +69,15 @@ public:
     void init();
 };
 
+// 二进制索引, index_merger 生成,通过TextIndexFile生成BinaryIndexFile
+class BinaryIndexFile: public BaseIndexFile
+{
+public:
+    explicit BinaryIndexFile(const std::string fname) : BaseIndexFile(fname) {}
+    ~BinaryIndexFile() {}
+    void init();
+};
+
 class Index
 {
 public:
@@ -78,9 +87,8 @@ public:
     void dump_termlist(std::string *ret = NULL);
     bool new_queryterm(IQueryTerm **queryterm, const termid_t termid);
 private:
-    IIndexFile * new_index_file(const std::string name);
+    IIndexFile * new_index_file(const std::string name, ThreadPool &thread_pool);
 private:
-    ThreadPool m_thread_pool;
     std::vector<IIndexFile*> m_idxfiles;
 };
 
