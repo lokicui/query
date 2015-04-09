@@ -1,3 +1,4 @@
+// Copyright (c) 2015, lokicui@gmail.com. All rights reserved.
 #ifndef SRC_INTERSECTOR_H
 #define SRC_INTERSECTOR_H
 #pragma once
@@ -29,10 +30,11 @@ class Intersector
 public:
     typedef std::vector<IQueryTerm*> querytermlist_t;
 public:
-    Intersector(const querytermlist_t &termlist)
+    explicit Intersector(const querytermlist_t &termlist) : m_min_df_term(NULL)
     {
         // @todo query term排重
         querytermlist_t termlist_sort;
+        CHECK(!termlist.empty()) << " termlist can't be empty";
         termlist_sort.assign(termlist.begin(), termlist.end());
         if (!termlist_sort.empty())
         {

@@ -27,7 +27,8 @@ public:
 class BaseIndexFile: public IIndexFile
 {
 public:
-    typedef std::map<termid_t, offset_t> termid2offset_t;
+    typedef std::pair<termid_t, offset_t> termid2offset_t;
+    typedef std::vector<termid2offset_t> termid2offset_array_t;
 public:
     explicit BaseIndexFile(const std::string fname);
     // virtual void init() = 0;
@@ -51,13 +52,17 @@ public:
         return m_fname;
     }
 protected:
+    static bool cmp_(const termid2offset_t &lhs, const termid2offset_t &rhs)
+    {
+        return lhs.first < rhs.first;
+    }
     size_t read_(char *buff, size_t size, long offset);
 protected:
     const std::string m_fname;
     termid_t m_max_termid;
     Mutex m_mutex;
     FILE* m_fd;
-    termid2offset_t m_termid2offset;
+    termid2offset_array_t m_termid2offset;
 };
 
 // 纯文本的索引, hadoop streaming生成的
@@ -87,7 +92,7 @@ public:
     void dump_termlist(std::string *ret = NULL);
     bool new_queryterm(IQueryTerm **queryterm, const termid_t termid);
 private:
-    IIndexFile * new_index_file(const std::string name, ThreadPool &thread_pool);
+    IIndexFile * new_index_file(const std::string name, ThreadPool *thread_pool);
 private:
     std::vector<IIndexFile*> m_idxfiles;
 };

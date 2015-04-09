@@ -10,11 +10,26 @@ BaseIndexFile::BaseIndexFile(const std::string fname): m_fname(fname), m_max_ter
 
 bool BaseIndexFile::get_offset(offset_t *offset, const termid_t termid)
 {
-    termid2offset_t::const_iterator it = m_termid2offset.find(termid);
-    if (it != m_termid2offset.end())
+    ssize_t left(0), right(m_termid2offset.size());
+    if (m_termid2offset.empty())
+        return false;
+    while (left <= right)
     {
-        *offset = it->second;
-        return true;
+        ssize_t mid = (left + right) / 2;
+        const termid2offset_t *curr = &m_termid2offset[mid];
+        if (termid == curr->first)
+        {
+            *offset = curr->second;
+            return true;
+        }
+        else if (termid < curr->first)
+        {
+            right = mid - 1;
+        }
+        else if (termid > curr->first)
+        {
+            left = mid + 1;
+        }
     }
     return false;
 }
@@ -31,9 +46,9 @@ size_t BaseIndexFile::read(char *buff, size_t size, ssize_t offset, int whence)
 
 void BaseIndexFile::dump_termlist(std::string *ret)
 {
-    for (termid2offset_t::const_iterator it = m_termid2offset.begin(); it != m_termid2offset.end(); ++it)
+    for (termid2offset_array_t::const_iterator it = m_termid2offset.begin(); it != m_termid2offset.end(); ++it)
     {
-        termid_t termid = it->first;
+        termid_t termid = (*it).first;
         // termid %= 1023;
         if (ret)
             StringFormatAppend(ret, "%lu\n", termid);
@@ -120,14 +135,14 @@ void TextIndexFile::init()
         throw std::runtime_error(StringFormat("%s:%d:%s faield with %lu!=%lu\n", __FILE__, __LINE__,
                                               __FUNCTION__, termlist.size(), offsetlist.size()));
 
-
-    // m_termid2offset
+    m_termid2offset.reserve(termlist.size());
     for (size_t i = 0; i < termlist.size(); ++i)
     {
         const termid_t &termid = termlist[i];
         const offset_t &offset = offsetlist[i];
-        m_termid2offset.insert(std::pair<termid_t, offset_t>(termid, offset));
+        m_termid2offset.push_back(std::pair<termid_t, offset_t>(termid, offset));
     }
+    std::sort(m_termid2offset.begin(), m_termid2offset.end(), cmp_);
     LOG(INFO) << get_fname() << " load " << m_termid2offset.size() << " records.";
 }
 
@@ -150,19 +165,19 @@ int32_t Index::init(const std::string pattern)
     ThreadPool thread_pool(16, 32);
     for (size_t i = 0; i < fnames.size(); ++i) {
         const std::string& name = fnames[i];
-        IIndexFile * indexfile = new_index_file(name, thread_pool);
+        IIndexFile * indexfile = new_index_file(name, &thread_pool);
         m_idxfiles.push_back(indexfile);
     }
     thread_pool.WaitForIdle();
     return 0;
 }
 
-IIndexFile * Index::new_index_file(const std::string name, ThreadPool& thread_pool)
+IIndexFile * Index::new_index_file(const std::string name, ThreadPool* thread_pool)
 {
     TextIndexFile * indexfile = new TextIndexFile(name);
     // 放在这里是迫不得已
     Closure<void>* closure = NewClosure(indexfile, &TextIndexFile::init);
-    thread_pool.AddTask(closure);
+    thread_pool->AddTask(closure);
     return indexfile;
 }
 
