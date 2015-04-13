@@ -14,12 +14,17 @@ typedef struct DocInfo
 {
     std::string to_string() const
     {
-        return StringFormat("%" PRIx64 "\t%x\t%x\t%x", pageid_, classid_, selected_, adoptrate_);
+        return StringFormat("%x\t%x\t%x\t%x\t%x\t%x\t%x", pageid_, resolved_,
+                            classid_, answer_cnt_, click_cnt_, rich_, time_);
     }
-    pageid_t pageid_;
+    uint32_t pageid_;
     uint32_t classid_;
-    uint8_t selected_ : 1;
-    uint8_t adoptrate_ : 7;
+    uint32_t time_;
+    uint16_t answer_cnt_;
+    uint16_t click_cnt_;
+    uint8_t resolved_ : 1;
+    uint8_t elite_ : 1;
+    uint8_t rich_ : 1;
 }docinfo_t;
 #pragma pack(pop)
 
@@ -36,7 +41,6 @@ public:
         glob(pattern.c_str(), GLOB_DOOFFS, NULL, &globbuf);
         std::vector< std::vector<docinfo_t>* > docinfolist;
         ThreadPool thread_pool(16, 32);
-        // 计算出record size
         for (size_t i = 0; i < globbuf.gl_pathc; ++i) {
             const char *fname = globbuf.gl_pathv[i];
             FILE * fd = fopen(fname, "r");
@@ -46,43 +50,28 @@ public:
                 continue;
             }
             docinfolist.push_back(new std::vector<docinfo_t>());
-            // fd 在load_fd函数中被close
             Closure<void>* closure = NewClosure(this, &DocInfoManager::load_fd,
-                                               docinfolist.back(), fname, fd);
-            thread_pool.AddTask(closure);
-        }
-        thread_pool.WaitForIdle();
-        size_t total(0);
-        for (std::vector< std::vector<docinfo_t>* >::const_iterator it = docinfolist.begin();
-             it != docinfolist.end(); ++it)
-        {
-            total += (*it)->size();
-            delete (*it);
-        }
-
-        // 先预分配内存
-        docinfolist_.reserve(total);
-        LOG(INFO) << "prepare to load " << total << " records.";
-        //正式加载到内存
-        for (size_t i = 0; i < globbuf.gl_pathc; ++i) {
-            const char *fname = globbuf.gl_pathv[i];
-            FILE * fd = fopen(fname, "r");
-            if (!fd)
-            {
-                PLOG(ERROR) << fname << " open failed";
-                continue;
-            }
-            docinfolist.push_back(new std::vector<docinfo_t>());
-            // fd 在load_fd函数中被close
-            Closure<void>* closure = NewClosure(this, &DocInfoManager::load_fd,
-                                               &docinfolist_, fname, fd);
+                                                docinfolist.back(), fname, fd);
             thread_pool.AddTask(closure);
         }
         thread_pool.WaitForIdle();
         globfree(&globbuf);
+        size_t n(0);
+        for (std::vector< std::vector<docinfo_t>* >::const_iterator it = docinfolist.begin();
+             it != docinfolist.end(); ++it)
+        {
+            n += (*it)->size();
+        }
+        docinfolist_.reserve(n);
+        for (std::vector< std::vector<docinfo_t>* >::const_iterator it = docinfolist.begin();
+             it != docinfolist.end(); ++it)
+        {
+            docinfolist_.insert(docinfolist_.end(), (*it)->begin(), (*it)->end());
+            delete (*it);
+        }
         LOG(INFO) << "load " << docinfolist_.size() << " finish,capacity=" <<
             docinfolist_.capacity();
-        std::sort(docinfolist_.begin(), docinfolist_.end(), cmp_);
+        std::sort(docinfolist_.begin(), docinfolist_.end(), cmp);
         LOG(INFO) << "sort " << docinfolist_.size() << " finish!";
         return docinfolist_.size();
     }
@@ -107,7 +96,7 @@ public:
     }
 
 private:
-    static bool cmp_(const docinfo_t& lhs, const docinfo_t& rhs)
+    static bool cmp(const docinfo_t& lhs, const docinfo_t& rhs)
     {
         return lhs.pageid_ < rhs.pageid_;
     }
@@ -119,10 +108,6 @@ private:
         ssize_t read;
         if (!fd)
             return;
-        std::vector<docinfo_t> docinfolist_tmp;
-        static const size_t kBufSize = 64 << 20; // 64M
-        scoped_array<char> buf(new char[kBufSize]);
-        setbuffer(fd, buf.get(), kBufSize);
         while ((read = getline(&line, &len, fd)) != -1)
         {
             line[read] = '\0';
@@ -143,31 +128,35 @@ private:
                 }
             }
             items.push_back(start);
-            if (items.size() < 4)
+            if (items.size() < 7)
                 continue;
-            const char* ppageid = items[0];
-            const char* pclassid = items[1];
-            const char* pselected = items[2];
-            const char* padoptrate = items[3];
+            const char* pqid = items[0];
+            const char* pstate = items[1];
+            const char* pclassid = items[2];
+            const char* panswer_cnt = items[3];
+            const char* pclick_cnt = items[4];
+            const char* prich = items[5];
+            const char* ptime = items[6];
             docinfo_t docinfo;
-            char *endptr(NULL);
-            docinfo.pageid_ = strtoull(ppageid, &endptr, kValueBase);
-            docinfo.classid_ = strtoull(pclassid, &endptr, kValueBase);
-            docinfo.selected_ = strtoull(pselected, &endptr, kValueBase);
-            docinfo.adoptrate_ = strtoull(padoptrate, &endptr, kValueBase);
-            docinfolist_tmp.push_back(docinfo);
-            // std::cout << docinfo.to_string() << std::endl;
+            StringToNumber(pqid, &docinfo.pageid_, kValueBase);
+            uint32_t state(0), rich(0);
+            StringToNumber(pstate, &state, kValueBase);
+            StringToNumber(pclassid, &docinfo.classid_, kValueBase);
+            StringToNumber(panswer_cnt, &docinfo.answer_cnt_, kValueBase);
+            StringToNumber(pclick_cnt, &docinfo.click_cnt_, kValueBase);
+            StringToNumber(ptime, &docinfo.time_, kValueBase);
+            StringToNumber(prich, &rich, kValueBase);
+            docinfo.rich_ = static_cast<bool>(rich);
+            docinfo.elite_ = (docinfo.pageid_ > 2000000000);
+            docinfo.resolved_ = state == 4;
+            docinfos->push_back(docinfo);
         }
         fclose(fd);
         if (line)
             free(line);
-        std::sort(docinfolist_tmp.begin(), docinfolist_tmp.end(), cmp_);
-        MutexLocker locker(&mutex_);
-        docinfos->insert(docinfos->end(), docinfolist_tmp.begin(), docinfolist_tmp.end());
         LOG(INFO) << fname << " load " << docinfos->size() << " records.";
     }
 private:
     std::vector<docinfo_t> docinfolist_;
-    Mutex mutex_;
 };
 #endif // SRC_DOCINFO_H

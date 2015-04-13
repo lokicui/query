@@ -282,7 +282,7 @@ void DoProcessRequest(const HttpRequest* http_request,
     Json::Value array_docid;
     std::map<uint32_t, size_t> classid_st;
     size_t cnt(0);
-    if (hitall)
+    if (hitall && !queryterms.empty())
     {
         Intersector intersector(queryterms);
         pageid_t pageid(0);
