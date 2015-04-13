@@ -232,7 +232,6 @@ out:
 
     int32_t remove(const candidate_t* candidate)
     {
-        // @todo 还没完工
         // 确认存在这个candidate
         // 所有fail_指向这个node的都要改指向node->fail_
         if (!candidate || candidate->empty())
