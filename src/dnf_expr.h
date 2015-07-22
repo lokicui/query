@@ -160,6 +160,7 @@ public:
                 }
                 else
                 {
+                    //predoc != cdoc
                     mindoc = std::min(mindoc, cdoc - 1);
                     p = p->fail_;
                 }
@@ -265,7 +266,7 @@ out:
             return -2;
         //
         // 说明:
-        //      -f->  代表succ_指针
+        //      -f->  代表fail_指针
         //      -sf-> 代表succ_和fail_指针
         //      没有标注的都是succ_指针
         //      parent指针没有画出来

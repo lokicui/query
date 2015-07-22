@@ -49,8 +49,8 @@ public:
                 continue;
             }
             docinfolist.push_back(new std::vector<docinfo_t>());
-            // fd 在load_fd函数中被close
             Closure<void>* closure = NewClosure(this, &DocInfoManager::load_fd,
+            // fd 在load_fd函数中被close
                                                docinfolist.back(), fname, fd);
             thread_pool.AddTask(closure);
         }

@@ -276,7 +276,7 @@ void DoProcessRequest(const HttpRequest* http_request,
     }
 
     static const size_t size_threshold = 1000;
-    static const size_t statistics_threshold = 100000;
+    static const size_t statistics_threshold = 1000000;
     Json::Value array_docid;
     std::map<uint32_t, size_t> classid_st;
     std::map<uint32_t, size_t> date_st;
